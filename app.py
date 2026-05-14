@@ -3,75 +3,107 @@ import requests
 import io
 from PIL import Image
 
-st.set_page_config(page_title="ROK AI Forge", page_icon="🛡️", layout="wide")
+# 1. Page Configuration
+st.set_page_config(page_title="Profile Pic Generator", page_icon="🛡️", layout="wide")
 
+# Dark mode styling for a clean gamer look
+st.markdown("""
+    <style>
+    stButton>button {
+        width: 100%;
+        border-radius: 8px;
+        height: 3.5em;
+        background-color: #4CAF50;
+        color: white;
+        font-weight: bold;
+    }
+    </style>
+    """, unsafe_content_safe=True)
+
+# 2. API Connection
 API_URL = "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell"
 
 if "HF_TOKEN" not in st.secrets:
-    st.error("🚨 Missing HF_TOKEN in Secrets!")
+    st.error("Error: HF_TOKEN not found in Streamlit Secrets.")
     st.stop()
 
 headers = {"Authorization": f"Bearer {st.secrets['HF_TOKEN']}"}
 
-def generate_unified_prompt(subject, style, bg_color, alliance_name):
+def build_prompt(subject, style, bg_color, name):
     """
-    This formula merges the art and text into a single instruction set for the AI.
+    Structured formula to ensure the AI creates high-end gaming emblems.
     """
-    style_descriptors = {
-        "Medieval Heraldry": "metallic 3D crest, embossed gold filigree, authentic royal shield",
-        "E-Sports": "modern aggressive gaming mascot, thick bold vector outlines, neon accents",
-        "Royal": "minimalist luxury crown aesthetic, silk and gold textures, elegant symmetry",
-        "Viking": "carved stone rune, weathered wood texture, ancient tribal aesthetic"
+    style_styles = {
+        "E-Sports": "modern aggressive vector, thick bold outlines, mascot style, sharp geometric shading",
+        "Classic": "3D embossed crest, royal shield, metallic and gold textures, heraldic filigree",
+        "Minimal": "clean flat vector design, modern minimalist aesthetic, symmetrical icon",
+        "Fantasy": "dark gothic engraving, weathered stone texture, ancient cinematic atmosphere"
     }
     
-    descriptor = style_descriptors.get(style, "sleek vector art")
+    style_desc = style_styles.get(style, "professional gaming vector")
     
-    # We use quotes around the text to signal to FLUX that it needs to render these specific characters.
-    text_instruction = f'with the text "{alliance_name.upper()}" integrated into the bottom of the design' if alliance_name else ""
+    # Direct instruction for the AI to include the text within the artwork
+    text_instruction = f'including the text "{name.upper()}" clearly displayed on a professional banner or nameplate at the base of the emblem' if name else "without any text"
 
     return (
-        f"A professional high-end gaming alliance emblem featuring {subject}, {text_instruction}. "
-        f"Style: {descriptor}. "
-        f"Typography: The text is part of the emblem, bold, cinematic, and perfectly integrated into the base of the shield. "
-        f"Composition: Symmetrical, centered, on a solid {bg_color} background. "
-        f"Quality: Masterpiece, 8k, sharp lines, studio lighting, no spelling errors, highly detailed."
+        f"A professional high-end gaming profile picture, a centered symmetrical emblem of {subject}, {text_instruction}. "
+        f"Style: {style_desc}. "
+        f"Composition: Square 1:1 ratio, centered on a solid {bg_color} background. "
+        f"Typography: Integrated into the design, bold readable font, matching the texture of the emblem. "
+        f"Quality: Masterpiece, 8k, sharp focus, clean lines, no spelling errors."
     )
 
-st.title("🛡️ ROK Alliance AI Forge")
-st.caption("Art and Typography forged simultaneously by the AI.")
+# 3. User Interface
+st.title("Profile Pic Generator")
+st.write("Generate professional alliance, guild, or clan images for your favorite games.")
 
-with st.sidebar:
-    st.header("Design Controls")
-    style_choice = st.selectbox("Style", ["Medieval Heraldry", "E-Sports", "Royal", "Viking"])
-    bg_input = st.text_input("Background Color", "Dark Slate Grey")
-    st.divider()
-    alliance_name = st.text_input("Alliance Name", "IRON LEGION")
+st.divider()
 
-subject_input = st.text_input("Emblem Subject", placeholder="e.g., A golden lion head")
+# Layout
+left_col, right_col = st.columns([1, 1], gap="large")
 
-if st.button("Forge Unified Logo", type="primary"):
-    if subject_input:
-        with st.spinner("AI is forging the emblem and text..."):
-            
-            final_prompt = generate_unified_prompt(subject_input, style_choice, bg_input, alliance_name)
-            
-            # Send the request to FLUX
-            response = requests.post(API_URL, headers=headers, json={"inputs": final_prompt})
-            
-            if response.status_code == 200:
-                # The AI returns the final image with text already on it
-                img = Image.open(io.BytesIO(response.content))
+with left_col:
+    st.subheader("Settings")
+    subject = st.text_input("Logo Subject", placeholder="e.g. A golden dragon, a blue wolf, crossed swords")
+    name = st.text_input("Alliance Name", placeholder="e.g. IRON LEGION")
+    
+    style = st.selectbox("Style", ["E-Sports", "Classic", "Minimal", "Fantasy"])
+    bg = st.text_input("Background Color", "Black")
+    
+    generate_btn = st.button("Generate Image")
+
+with right_col:
+    if generate_btn:
+        if not subject:
+            st.warning("Please describe what should be in the logo.")
+        else:
+            with st.spinner("Generating your image..."):
+                final_prompt = build_prompt(subject, style, bg, name)
                 
-                st.image(img, use_container_width=True)
-                
-                # Download
-                buf = io.BytesIO()
-                img.save(buf, format="PNG")
-                st.download_button("Download AI-Forged PNG", buf.getvalue(), "alliance_logo.png")
-            
-            elif response.status_code == 503:
-                st.info("The AI Forge is warming up. Please try again in 20 seconds.")
-            else:
-                st.error(f"Error {response.status_code}: {response.text}")
+                try:
+                    response = requests.post(API_URL, headers=headers, json={"inputs": final_prompt})
+                    
+                    if response.status_code == 200:
+                        img = Image.open(io.BytesIO(response.content))
+                        st.image(img, use_container_width=True)
+                        
+                        # Download button
+                        buf = io.BytesIO()
+                        img.save(buf, format="PNG")
+                        st.download_button(
+                            label="Download PNG",
+                            data=buf.getvalue(),
+                            file_name="alliance_pfp.png",
+                            mime="image/png"
+                        )
+                    elif response.status_code == 503:
+                        st.info("AI is loading. Please wait 10-20 seconds and click Generate again.")
+                    else:
+                        st.error(f"Error: {response.status_code}")
+                except Exception as e:
+                    st.error(f"Error: {e}")
     else:
-        st.warning("Please provide a subject.")
+        st.info("Fill out the settings and click Generate to see your logo here.")
+
+st.divider()
+st.caption("Free AI Image Generator | Powered by FLUX")
