@@ -6,19 +6,20 @@ from PIL import Image
 # 1. Page Configuration
 st.set_page_config(page_title="Profile Pic Generator", page_icon="🛡️", layout="wide")
 
-# Dark mode styling for a clean gamer look
+# Corrected CSS styling
 st.markdown("""
     <style>
-    stButton>button {
+    div.stButton > button:first-child {
         width: 100%;
         border-radius: 8px;
         height: 3.5em;
         background-color: #4CAF50;
         color: white;
         font-weight: bold;
+        border: none;
     }
     </style>
-    """, unsafe_content_safe=True)
+    """, unsafe_allow_html=True)
 
 # 2. API Connection
 API_URL = "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell"
@@ -42,8 +43,8 @@ def build_prompt(subject, style, bg_color, name):
     
     style_desc = style_styles.get(style, "professional gaming vector")
     
-    # Direct instruction for the AI to include the text within the artwork
-    text_instruction = f'including the text "{name.upper()}" clearly displayed on a professional banner or nameplate at the base of the emblem' if name else "without any text"
+    # Text Instruction for AI rendering
+    text_instruction = f'including the text "{name.upper()}" clearly displayed on a professional banner or nameplate integrated into the base of the emblem' if name else "without any text"
 
     return (
         f"A professional high-end gaming profile picture, a centered symmetrical emblem of {subject}, {text_instruction}. "
@@ -55,7 +56,7 @@ def build_prompt(subject, style, bg_color, name):
 
 # 3. User Interface
 st.title("Profile Pic Generator")
-st.write("Generate professional alliance, guild, or clan images for your favorite games.")
+st.write("This app is designed to make high-quality alliance images, clan logos, and gaming profile pictures instantly.")
 
 st.divider()
 
@@ -101,7 +102,7 @@ with right_col:
                     else:
                         st.error(f"Error: {response.status_code}")
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    st.error(f"An error occurred: {e}")
     else:
         st.info("Fill out the settings and click Generate to see your logo here.")
 
