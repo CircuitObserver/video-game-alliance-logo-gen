@@ -31,31 +31,58 @@ headers = {"Authorization": f"Bearer {st.secrets['HF_TOKEN']}"}
 
 # 2. Safety & Moderation Engine (Zero-Tolerance)
 def moderate_prompt(user_input):
-    """Enhanced zero-tolerance moderation using XML structure and specific criteria."""
+    """Fail-safe moderation: Assumes unsafe unless explicitly proven otherwise."""
     system_message = """
-    You are a strict Content Safety Officer for a family-friendly gaming site.
+    You are a Content Guard. Your ONLY job is to find reasons to flag a prompt as UNSAFE.
     
-    CRITERIA FOR 'SAFE: False':
-    - Any mention of blood, gore, wounds, or bodily fluids (even for fantasy monsters).
-    - Realistic modern weapons (guns, assault rifles, realistic knives).
-    - Sexual, suggestive, or NSFW language.
-    - Toxicity: insults (loser, noob), hate speech, or harassment.
-    - Illegal acts, drugs, or smoking references.
+    STRICT BLACKLIST (Set SAFE: False if these appear):
+    - Blood, gore, skulls, skeletons, death, wounds, or violence.
+    - Realistic guns, pistols, rifles, or modern weaponry.
+    - Insults, middle fingers, rude gestures, or toxic language.
+    - Anything NSFW or suggestive.
 
-    INSTRUCTIONS:
-    1. Analyze the user prompt.
-    2. If ANY criteria are met, set SAFE: False.
-    3. REWRITE the prompt into a heroic, professional gaming version.
-       - Replace blood with 'glowing energy' or 'magical aura'.
-       - Replace guns with 'sci-fi blasters' or 'energy staves'.
-       - Replace toxicity with 'valiant' or 'champion'.
-    
+    If the prompt contains ANY of the above, you MUST set SAFE: False.
+    Then, REWRITE the prompt into a clean, 'High-Fantasy' or 'Sci-Fi' version.
+    Example: Change 'Bloody Skull' to 'Glowing Crystal'.
+    Example: Change 'Gun' to 'Staff'.
+
     OUTPUT FORMAT:
-    <moderation>
     SAFE: [True/False]
-    REWRITTEN: [Your sanitized version]
-    </moderation>
+    REWRITTEN: [Sanitized Prompt]
     """
+    
+    payload = {
+        "inputs": f"<|im_start|>system\n{system_message}<|im_end|>\n<|im_start|>user\n{user_input}<|im_end|>\n<|im_start|>assistant\n",
+        "parameters": {"max_new_tokens": 150, "temperature": 0.01} # Lower temp = more robotic/strict
+    }
+    
+    try:
+        response = requests.post(LLM_URL, headers=headers, json=payload, timeout=10)
+        res_json = response.json()
+        
+        # Extract text correctly from Qwen's response format
+        if isinstance(res_json, list):
+            full_text = res_json[0].get('generated_text', "")
+        else:
+            full_text = res_json.get('generated_text', "")
+            
+        result_text = full_text.split("assistant\n")[-1]
+        
+        # FAIL-SAFE LOGIC: 
+        # Only set to True if 'SAFE: True' is explicitly found. 
+        # If 'SAFE: False' is found OR the word 'True' is missing, it is UNSAFE.
+        is_safe = "SAFE: True" in result_text and "SAFE: False" not in result_text
+        
+        # Extract rewritten text
+        if "REWRITTEN:" in result_text:
+            sanitized = result_text.split("REWRITTEN:")[-1].strip()
+        else:
+            sanitized = "A professional heroic gaming emblem" # Ultra-safe fallback
+            
+        return is_safe, sanitized
+    except Exception:
+        # If the moderation AI fails, we sanitize the prompt manually for safety
+        return False, "A professional symmetrical gaming emblem"
     
     payload = {
         "inputs": f"<|im_start|>system\n{system_message}<|im_end|>\n<|im_start|>user\n{user_input}<|im_end|>\n<|im_start|>assistant\n<moderation>\n",
