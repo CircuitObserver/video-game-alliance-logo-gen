@@ -3,116 +3,156 @@ import requests
 import io
 from PIL import Image
 
-# 1. Configuration
+# 1. Page Configuration
 st.set_page_config(page_title="Profile Pic Generator", page_icon="🛡️", layout="wide")
 
-# Corrected CSS
+# Custom CSS for a professional look
 st.markdown("""
     <style>
     div.stButton > button:first-child {
         width: 100%; border-radius: 8px; height: 3.5em;
         background-color: #4CAF50; color: white; font-weight: bold; border: none;
     }
+    .stAlert {
+        border-radius: 8px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# API Endpoints
+# API Configuration
 LLM_URL = "https://router.huggingface.co/hf-inference/models/Qwen/Qwen2.5-72B-Instruct"
 IMG_URL = "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell"
 
 if "HF_TOKEN" not in st.secrets:
-    st.error("Error: HF_TOKEN not found in Secrets.")
+    st.error("Critical Error: HF_TOKEN not found in Secrets.")
     st.stop()
 
 headers = {"Authorization": f"Bearer {st.secrets['HF_TOKEN']}"}
 
-# 2. Safety & Moderation Engine
+# 2. Safety & Moderation Engine (Zero-Tolerance)
 def moderate_prompt(user_input):
-    """Sends prompt to Qwen to check for safety and sanitize it."""
-    system_message = (
-        "You are a safety moderation agent for a gaming profile picture generator. "
-        "Your task: Identify any inappropriate, NSFW, violent, or harmful content. "
-        "Return your response in EXACTLY this format: 'SAFE: [True/False] | REWRITTEN: [Sanitized Prompt]'. "
-        "If the input is safe, set SAFE to True and keep the prompt mostly as is. "
-        "If it is unsafe, set SAFE to False and remove ONLY the harmful parts, "
-        "replacing them with safe, heroic gaming alternatives."
-    )
+    """Enhanced zero-tolerance moderation using XML structure and specific criteria."""
+    system_message = """
+    You are a strict Content Safety Officer for a family-friendly gaming site.
+    
+    CRITERIA FOR 'SAFE: False':
+    - Any mention of blood, gore, wounds, or bodily fluids (even for fantasy monsters).
+    - Realistic modern weapons (guns, assault rifles, realistic knives).
+    - Sexual, suggestive, or NSFW language.
+    - Toxicity: insults (loser, noob), hate speech, or harassment.
+    - Illegal acts, drugs, or smoking references.
+
+    INSTRUCTIONS:
+    1. Analyze the user prompt.
+    2. If ANY criteria are met, set SAFE: False.
+    3. REWRITE the prompt into a heroic, professional gaming version.
+       - Replace blood with 'glowing energy' or 'magical aura'.
+       - Replace guns with 'sci-fi blasters' or 'energy staves'.
+       - Replace toxicity with 'valiant' or 'champion'.
+    
+    OUTPUT FORMAT:
+    <moderation>
+    SAFE: [True/False]
+    REWRITTEN: [Your sanitized version]
+    </moderation>
+    """
     
     payload = {
-        "inputs": f"<|im_start|>system\n{system_message}<|im_end|>\n<|im_start|>user\n{user_input}<|im_end|>\n<|im_start|>assistant\n",
-        "parameters": {"max_new_tokens": 150, "temperature": 0.1}
+        "inputs": f"<|im_start|>system\n{system_message}<|im_end|>\n<|im_start|>user\n{user_input}<|im_end|>\n<|im_start|>assistant\n<moderation>\n",
+        "parameters": {"max_new_tokens": 250, "temperature": 0.1}
     }
     
     try:
-        response = requests.post(LLM_URL, headers=headers, json=payload)
-        result_text = response.json()[0]['generated_text'].split("assistant\n")[-1]
+        response = requests.post(LLM_URL, headers=headers, json=payload, timeout=10)
+        # Force extraction from the <moderation> tag
+        result_text = response.json()[0]['generated_text'].split("<moderation>\n")[-1]
         
-        # Parse the custom format
         is_safe = "SAFE: True" in result_text
-        sanitized_prompt = result_text.split("REWRITTEN: ")[-1].strip()
-        return is_safe, sanitized_prompt
-    except Exception:
-        # Fallback if LLM fails: assume safe but use basic cleaning
+        # Clean up the REWRITTEN part
+        sanitized = result_text.split("REWRITTEN: ")[-1].replace("</moderation>", "").strip()
+        
+        return is_safe, sanitized
+    except Exception as e:
+        # Fallback for safety
         return True, user_input
 
 def build_image_prompt(subject, style, bg_color, name):
     style_styles = {
-        "E-Sports": "modern aggressive vector, bold outlines, mascot style",
-        "Classic": "3D crest, royal shield, metallic gold textures",
-        "Minimal": "clean flat design, minimalist icon",
-        "Fantasy": "dark gothic engraving, weathered stone texture"
+        "E-Sports": "modern aggressive vector, thick bold outlines, mascot style, sharp geometric shading",
+        "Classic": "3D embossed crest, royal shield, metallic gold textures, heraldic filigree",
+        "Minimal": "clean flat vector design, modern minimalist aesthetic, symmetrical icon",
+        "Fantasy": "dark gothic engraving, weathered stone texture, ancient cinematic atmosphere"
     }
     style_desc = style_styles.get(style, "gaming vector")
-    text_bit = f'with the text "{name.upper()}" integrated into a nameplate' if name else ""
     
-    return (f"A professional gaming profile picture of {subject}, {text_bit}. "
-            f"Style: {style_desc}. Symmetrical, centered on solid {bg_color} background. "
-            f"8k, sharp focus, clean lines.")
+    # Prompting FLUX to render the text naturally
+    text_bit = f'including the text "{name.upper()}" clearly displayed on a professional nameplate at the base of the emblem' if name else "without any text"
+
+    return (
+        f"A professional high-end gaming profile picture, a centered symmetrical emblem of {subject}, {text_bit}. "
+        f"Style: {style_desc}. Composition: Square 1:1, centered on a solid {bg_color} background. "
+        f"Quality: Masterpiece, 8k, sharp focus, clean lines, professional typography."
+    )
 
 # 3. User Interface
 st.title("Profile Pic Generator")
-st.write("This app is designed to make high-quality alliance images and gaming profile pictures instantly.")
+st.write("This app is designed to make high-quality alliance images, clan logos, and gaming profile pictures instantly.")
+
+st.divider()
 
 left_col, right_col = st.columns([1, 1], gap="large")
 
 with left_col:
     st.subheader("Settings")
-    subject = st.text_input("Logo Subject", placeholder="e.g. A golden dragon")
-    name = st.text_input("Alliance Name", placeholder="e.g. IRON LEGION")
-    style = st.selectbox("Style", ["E-Sports", "Classic", "Minimal", "Fantasy"])
-    bg = st.text_input("Background Color", "Black")
+    subject_input = st.text_input("Logo Subject", placeholder="e.g. A golden lion head")
+    alliance_name = st.text_input("Alliance Name", placeholder="e.g. TITAN SQUAD")
+    
+    style_choice = st.selectbox("Style Aesthetic", ["E-Sports", "Classic", "Minimal", "Fantasy"])
+    bg_color = st.text_input("Background Color", "Dark Grey")
+    
     generate_btn = st.button("Generate Image")
 
 with right_col:
     if generate_btn:
-        if not subject:
-            st.warning("Please describe the subject.")
+        if not subject_input:
+            st.warning("Please enter a subject for your logo.")
         else:
-            with st.spinner("Analyzing safety and forging art..."):
-                # STEP 1: MODERATION
-                is_safe, final_subject = moderate_prompt(subject)
+            with st.spinner("Moderating prompt and forging art..."):
+                # STEP 1: MODERATION LAYER
+                is_safe, sanitized_subject = moderate_prompt(subject_input)
                 
-                # If unsafe, show the warning and the new prompt
+                # If unsafe, show warning and sanitized result
                 if not is_safe:
                     st.warning("⚠️ **Safety Notice:** Inappropriate content was detected. Your prompt has been rewritten for safety.")
-                    st.info(f"**Sanitized Prompt:** {final_subject}")
+                    st.info(f"**Sanitized to:** {sanitized_subject}")
 
-                # STEP 2: GENERATE IMAGE
-                full_image_prompt = build_image_prompt(final_subject, style, bg, name)
+                # STEP 2: IMAGE GENERATION LAYER
+                final_img_prompt = build_image_prompt(sanitized_subject, style_choice, bg_color, alliance_name)
                 
-                img_res = requests.post(IMG_URL, headers=headers, json={"inputs": full_image_prompt})
-                
-                if img_res.status_code == 200:
-                    img = Image.open(io.BytesIO(img_res.content))
-                    st.image(img, use_container_width=True)
+                try:
+                    img_res = requests.post(IMG_URL, headers=headers, json={"inputs": final_img_prompt}, timeout=30)
                     
-                    buf = io.BytesIO()
-                    img.save(buf, format="PNG")
-                    st.download_button("Download PNG", buf.getvalue(), "pfp.png", "image/png")
-                else:
-                    st.error("The image generator is busy. Try again in 20 seconds.")
+                    if img_res.status_code == 200:
+                        img = Image.open(io.BytesIO(img_res.content))
+                        st.image(img, use_container_width=True)
+                        
+                        # Download Section
+                        buf = io.BytesIO()
+                        img.save(buf, format="PNG")
+                        st.download_button(
+                            label="Download PNG",
+                            data=buf.getvalue(),
+                            file_name=f"{alliance_name if alliance_name else 'logo'}.png",
+                            mime="image/png"
+                        )
+                    elif img_res.status_code == 503:
+                        st.info("The AI model is currently loading. Please wait 15 seconds and try again.")
+                    else:
+                        st.error(f"Image API Error: {img_res.status_code}")
+                except Exception as e:
+                    st.error(f"Generation failed: {e}")
     else:
-        st.info("Fill out settings and click Generate.")
+        st.info("Fill out the settings on the left to generate your custom profile picture.")
 
 st.divider()
-st.caption("AI Moderated | Powered by Qwen 72B & FLUX")
+st.caption("Gaming Profile Pic Generator | Managed Safety via Qwen 2.5-72B | Image Engine: FLUX.1 [schnell]")
