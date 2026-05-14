@@ -1,9 +1,9 @@
 import streamlit as st
 import requests
 import io
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
-st.set_page_config(page_title="ROK Alliance Forge", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="ROK AI Forge", page_icon="🛡️", layout="wide")
 
 API_URL = "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell"
 
@@ -13,81 +13,65 @@ if "HF_TOKEN" not in st.secrets:
 
 headers = {"Authorization": f"Bearer {st.secrets['HF_TOKEN']}"}
 
-def generate_integrated_prompt(subject, style, bg_color):
+def generate_unified_prompt(subject, style, bg_color, alliance_name):
+    """
+    This formula merges the art and text into a single instruction set for the AI.
+    """
     style_descriptors = {
-        "Medieval Heraldry": "metallic crest, embossed gold filigree, royal shield emblem",
-        "E-Sports": "aggressive gaming mascot, thick bold outlines, sharp vector edges",
-        "Royal": "minimalist luxury crown, silk and gold textures, elegant symmetrical icon",
-        "Viking": "carved stone rune, weathered wood texture, ancient tribal emblem"
+        "Medieval Heraldry": "metallic 3D crest, embossed gold filigree, authentic royal shield",
+        "E-Sports": "modern aggressive gaming mascot, thick bold vector outlines, neon accents",
+        "Royal": "minimalist luxury crown aesthetic, silk and gold textures, elegant symmetry",
+        "Viking": "carved stone rune, weathered wood texture, ancient tribal aesthetic"
     }
-    descriptor = style_descriptors.get(style, "clean vector art")
     
-    # Formulaic Prompt: We ask for a "Badge" or "Emblem" specifically
+    descriptor = style_descriptors.get(style, "sleek vector art")
+    
+    # We use quotes around the text to signal to FLUX that it needs to render these specific characters.
+    text_instruction = f'with the text "{alliance_name.upper()}" integrated into the bottom of the design' if alliance_name else ""
+
     return (
-        f"A professional sleek gaming badge featuring {subject}. "
+        f"A professional high-end gaming alliance emblem featuring {subject}, {text_instruction}. "
         f"Style: {descriptor}. "
-        f"Composition: Centered emblem, symmetrical, high-quality vector, "
-        f"on a solid {bg_color} background. "
-        f"Note: The bottom of the emblem should have a clean horizontal area for a nameplate. "
-        f"Masterpiece, sharp focus, 8k, trending on ArtStation."
+        f"Typography: The text is part of the emblem, bold, cinematic, and perfectly integrated into the base of the shield. "
+        f"Composition: Symmetrical, centered, on a solid {bg_color} background. "
+        f"Quality: Masterpiece, 8k, sharp lines, studio lighting, no spelling errors, highly detailed."
     )
 
-st.title("🛡️ ROK Alliance Logo Forge")
+st.title("🛡️ ROK Alliance AI Forge")
+st.caption("Art and Typography forged simultaneously by the AI.")
 
 with st.sidebar:
-    st.header("🛠️ Design Controls")
-    style_choice = st.selectbox("Aesthetic Style", ["Medieval Heraldry", "E-Sports", "Royal", "Viking"])
-    bg_input = st.text_input("Background Color", "Dark Charcoal")
-    
+    st.header("Design Controls")
+    style_choice = st.selectbox("Style", ["Medieval Heraldry", "E-Sports", "Royal", "Viking"])
+    bg_input = st.text_input("Background Color", "Dark Slate Grey")
     st.divider()
-    st.header("Typography & Integration")
     alliance_name = st.text_input("Alliance Name", "IRON LEGION")
-    text_color = st.color_picker("Text Color", "#D4AF37")
-    banner_opacity = st.slider("Banner Opacity", 0, 255, 180) # Controls the nameplate background
 
-subject_input = st.text_input("Emblem Icon", placeholder="e.g., A crimson phoenix")
+subject_input = st.text_input("Emblem Subject", placeholder="e.g., A golden lion head")
 
-if st.button("Generate Integrated Logo", type="primary"):
+if st.button("Forge Unified Logo", type="primary"):
     if subject_input:
-        with st.spinner("Forging..."):
-            final_prompt = generate_integrated_prompt(subject_input, style_choice, bg_input)
+        with st.spinner("AI is forging the emblem and text..."):
+            
+            final_prompt = generate_unified_prompt(subject_input, style_choice, bg_input, alliance_name)
+            
+            # Send the request to FLUX
             response = requests.post(API_URL, headers=headers, json={"inputs": final_prompt})
             
             if response.status_code == 200:
-                img = Image.open(io.BytesIO(response.content)).convert("RGBA")
-                draw = ImageDraw.Draw(img, "RGBA")
-                w, h = img.size
+                # The AI returns the final image with text already on it
+                img = Image.open(io.BytesIO(response.content))
                 
-                if alliance_name:
-                    # 1. Setup Font (Defaulting to large/bold)
-                    font = ImageFont.load_default() 
-                    
-                    # 2. Measure Text
-                    name_upper = alliance_name.upper()
-                    bbox = draw.textbbox((0, 0), name_upper, font=font)
-                    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-                    
-                    # 3. Create "Integrated" Nameplate (Banner)
-                    # We place it at roughly 75% height of the image
-                    rect_h = th + 40
-                    rect_y = (h * 0.75)
-                    
-                    # Draw semi-transparent background bar for the text
-                    # Using a darker version of the BG or black
-                    draw.rectangle(
-                        [((w - tw) / 2) - 20, rect_y, ((w + tw) / 2) + 20, rect_y + rect_h],
-                        fill=(0, 0, 0, banner_opacity)
-                    )
-                    
-                    # 4. Draw Text over the Banner
-                    draw.text(((w - tw) / 2, rect_y + 15), name_upper, fill=text_color, font=font)
-
                 st.image(img, use_container_width=True)
                 
+                # Download
                 buf = io.BytesIO()
                 img.save(buf, format="PNG")
-                st.download_button("Download PNG", buf.getvalue(), "alliance_logo.png")
+                st.download_button("Download AI-Forged PNG", buf.getvalue(), "alliance_logo.png")
+            
+            elif response.status_code == 503:
+                st.info("The AI Forge is warming up. Please try again in 20 seconds.")
             else:
-                st.error(f"Error {response.status_code}")
+                st.error(f"Error {response.status_code}: {response.text}")
     else:
-        st.warning("Please enter a subject.")
+        st.warning("Please provide a subject.")
